@@ -6,7 +6,7 @@ import numpy as np
 import pymupdf
 
 
-def _pdf_to_images(pdf_path: str, dpi: int = 200) -> list[np.ndarray]:
+def pdf_to_images(pdf_path: str, dpi: int = 200) -> list[np.ndarray]:
     doc = pymupdf.open(pdf_path)
     zoom = dpi / 72
     matrix = pymupdf.Matrix(zoom, zoom)
