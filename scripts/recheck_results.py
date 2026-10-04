@@ -1,7 +1,10 @@
 """Пересчитывает проверки сохранённых результатов
 Запуск из корня: python -m scripts.recheck_results
 """
+from pathlib import Path
 from app.services import document_store as store
+from app.services.integrations.xml_parser import extract_xml
+from app.services.xml_result_mapper import serialize_xml_fields
 from app.services.xml_result_mapper import map_xml_result
 from app.services.pdf_result_mapper import map_pdf_result
 from app.services.document_processor import _finish_result
@@ -21,13 +24,28 @@ def main():
             skipped += 1
             continue
         if kind == 'xml' and 'xml_fields' in result:
-            mapped = map_xml_result(result['xml_fields'], document['file_name'])
+            path = Path(document['file_path'])
+            if not path.is_file():
+                skipped += 1
+                print(f"Пропущен XML без исходного файла: {document['file_name']}")
+                continue
+            try:
+                fields = extract_xml(path)
+                mapped = map_xml_result(fields, document['file_name'])
+            except (ValueError, OSError):
+                skipped += 1
+                print(f"Пропущен XML с ошибкой чтения: {document['file_name']}")
+                continue
+            result['xml_fields'] = serialize_xml_fields(fields)
+            result['xml_metadata'] = {k: v for k, v in fields.items() if k.startswith('_')}
+            result['extracted_text'] = fields.get('IdDebtText') or '' 
         elif kind == 'pdf' and 'llm_fields' in result:
             fields = result['llm_fields']
             # Сохраняем ошибки вызова/ответа LLM, остальные проверки вычисляются заново.
             errors = [reason for reason in result.get('analysis', {}).get('review_reasons', [])
                       if 'LLM' in reason or 'Ответ модели' in reason]
-            mapped = map_pdf_result(fields, document['file_name'], errors=errors)
+            mapped = map_pdf_result(fields, document['file_name'], errors=errors,
+                                    source_text=result.get('extracted_text') or '')
         else:
             skipped += 1
             continue
