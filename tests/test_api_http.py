@@ -1,5 +1,4 @@
-"""Настоящие HTTP-тесты Uvicorn, multipart-загрузки и перезапуска сервера.
-
+"""HTTP-тесты Uvicorn, multipart-загрузки и перезапуска сервера.
 Тесты используют временную папку и отдельную SQLite-базу.
 Запуск: python -m unittest discover -s tests -p test_api_http.py -v
 """
