@@ -3,18 +3,26 @@ from pathlib import Path
 import numpy as np
 
 
-def pdf_to_images(pdf_path: str | Path, dpi: int = 300) -> list[np.ndarray]:
-    import os
-    from pdf2image import convert_from_path
+import pymupdf
 
-    poppler_path = os.getenv("POPPLER_PATH", "").strip() or None
 
-    pil_images = convert_from_path(
-        str(pdf_path),
-        dpi=dpi,
-        poppler_path=poppler_path,
-    )
-    return [pil_to_numpy(img) for img in pil_images]
+def _pdf_to_images(pdf_path: str, dpi: int = 200) -> list[np.ndarray]:
+    doc = pymupdf.open(pdf_path)
+    zoom = dpi / 72
+    matrix = pymupdf.Matrix(zoom, zoom)
+    images = []
+    for page in doc:
+        pix = page.get_pixmap(matrix=matrix, alpha=False)
+        img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
+            pix.height, pix.width, pix.n
+        )
+        if pix.n == 4:
+            img = img[:, :, :3]
+        images.append(img)
+    doc.close()
+    return images
+
+
 
 def pil_to_numpy(pil_image) -> np.ndarray:
     arr = np.array(pil_image)
