@@ -7,7 +7,7 @@ class PDFExtractorSettings(BaseSettings):
     sample_pages: int = 3
 
     ocr_engine: str = "easyocr"
-    ocr_languages: list[str] = ["ru", "en"]
+    ocr_languages: list[str] = ["ru"]
     ocr_dpi: int = 300
     ocr_use_gpu: bool = False
     ocr_confidence_threshold: float = 0.5
