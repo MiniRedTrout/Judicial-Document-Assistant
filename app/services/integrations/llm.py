@@ -1,5 +1,6 @@
 """Адаптер ветки feature-llm к OpenAI-совместимому HTTP API."""
 import json
+import re
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -15,6 +16,49 @@ class LLMUnavailable(RuntimeError):
 
 def _reject_constant(value):
     raise ValueError("Недопустимое числовое значение JSON")
+
+
+HTTP_HEADERS = {
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+    "User-Agent": "DeloDocumentAssistant/1.0",
+}
+
+
+def _http_failure(error) -> str:
+    """Показываем только известные коды, а не текст ответа с возможными секретами."""
+    code = None
+    try:
+        body = error.read(8192).decode("utf-8", errors="replace")
+        try:
+            payload = json.loads(body)
+            detail = payload.get("error", {}) if isinstance(payload, dict) else {}
+            if isinstance(detail, dict):
+                known = {
+                    "model_permission_blocked_org", "model_permission_blocked_project",
+                    "permissions_error", "invalid_api_key", "rate_limit_exceeded",
+                    "context_length_exceeded", "json_validate_failed", "model_not_found",
+                }
+                for candidate in (detail.get("code"), detail.get("type")):
+                    if isinstance(candidate, str) and candidate in known:
+                        code = candidate
+                        break
+        except (TypeError, ValueError):
+            pass
+        if code is None and re.search(r"error code:\s*1010\b", body, re.I):
+            code = "1010"
+    except (OSError, AttributeError):
+        pass
+    finally:
+        error.close()
+    message = f"LLM API вернул HTTP {error.code}"
+    if code:
+        message += f" (код: {code})"
+    if code in {"model_permission_blocked_org", "model_permission_blocked_project", "permissions_error"}:
+        message += "; проверьте разрешение модели в настройках организации/проекта Groq"
+    elif code == "1010":
+        message += "; HTTP-клиент отклонён защитой API"
+    return message
 
 
 def extract_fields(source) -> dict:
@@ -38,7 +82,7 @@ def extract_fields(source) -> dict:
     request = urllib.request.Request(
         settings.llm_base.rstrip("/") + "/chat/completions",
         data=json.dumps(payload, ensure_ascii=False).encode(),
-        headers={"Content-Type": "application/json", "Authorization": "Bearer " + settings.llm_key},
+        headers={**HTTP_HEADERS, "Authorization": "Bearer " + settings.llm_key},
         method="POST",
     )
     try:
@@ -47,9 +91,7 @@ def extract_fields(source) -> dict:
         content = raw["choices"][0]["message"]["content"]
         parsed = json.loads(content, parse_constant=_reject_constant)
     except urllib.error.HTTPError as error:
-        status_code = error.code
-        error.close()
-        raise LLMUnavailable(f"LLM API вернул HTTP {status_code}") from None
+        raise LLMUnavailable(_http_failure(error)) from None
     except (urllib.error.URLError, TimeoutError, KeyError, IndexError, TypeError, ValueError):
         raise LLMUnavailable("LLM недоступна или вернула некорректный JSON") from None
     if not isinstance(parsed, dict) or parsed.get("error"):
