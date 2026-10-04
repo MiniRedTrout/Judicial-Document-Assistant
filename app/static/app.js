@@ -1,25 +1,493 @@
-'use strict';
-const $ = id => document.getElementById(id);
-const state = {documents: [], selected: new Set(), current: null, refreshing: false, uploading: false};
-const names = {UPLOADED:'В очереди', PROCESSING:'Обрабатывается', REQUIRES_REVIEW:'Нужна проверка', COMPLETED:'Обработано', ERROR:'Ошибка'};
-function node(tag, text, cls) {const el = document.createElement(tag); if (text !== undefined) el.textContent = text; if (cls) el.className = cls; return el;}
-function notice(text, error=false) {$('notice').textContent=text; $('notice').hidden=false; $('notice').classList.toggle('error',error);}
-async function api(url, options) {const response=await fetch(url, options); const data=await response.json().catch(()=>null); if(!response.ok) {const detail=data?.detail; throw new Error(typeof detail==='string'?detail:detail?.error || detail?.message || `Ошибка запроса: ${response.status}`);} return data;}
-function visible() {const query=$('search').value.toLowerCase();const filter=$('filter').value;return state.documents.filter(d=>d.file_name.toLowerCase().includes(query)&&(filter==='all'||filter==='working'&&['UPLOADED','PROCESSING'].includes(d.status)||filter==='ready'&&d.stage==='COMPLETED'||filter==='error'&&d.status==='ERROR'));}
-function render() {const rows=$('rows'); rows.replaceChildren();const docs=visible();$('total').textContent=state.documents.length;$('empty').hidden=docs.length>0;$('empty').textContent=state.documents.length?'По заданному фильтру документов нет.':'Загрузите первый документ — результат появится здесь.';
- for(const d of docs){const tr=node('tr');const selectCell=node('td');const check=document.createElement('input');check.type='checkbox';check.checked=state.selected.has(d.document_id);check.setAttribute('aria-label',`Выбрать ${d.file_name}`);check.addEventListener('change',()=>{check.checked?state.selected.add(d.document_id):state.selected.delete(d.document_id);render();});selectCell.append(check);tr.append(selectCell);const file=node('td',undefined,'filename');file.append(node('span',d.file_type.toUpperCase(),'file-icon'),document.createTextNode(d.file_name));tr.append(file,node('td',d.file_type.toUpperCase()));const status=node('td');status.append(node('span',names[d.status]||d.status,'badge '+(d.status==='ERROR'?'error':d.stage==='COMPLETED'?'ready':'')));status.append(node('small',d.error||d.message||''));if(['UPLOADED','PROCESSING'].includes(d.status)){const progress=document.createElement('progress');progress.max=100;progress.value=d.progress;progress.setAttribute('aria-label','Ход обработки');status.append(progress);}tr.append(status);const actions=node('td');const button=node('button','Результат','secondary');button.disabled=d.stage!=='COMPLETED';button.addEventListener('click',()=>openDetail(d));actions.append(button);tr.append(actions);rows.append(tr);}
- const all=$('selectAll');all.checked=docs.length>0&&docs.every(d=>state.selected.has(d.document_id));all.indeterminate=docs.some(d=>state.selected.has(d.document_id))&&!all.checked;
- $('selectionHint').textContent=state.selected.size?`Выбрано: ${state.selected.size}. В CSV попадут обработанные документы выбранного формата.`:'Выгрузка включает все обработанные документы соответствующего формата.';
- for(const kind of ['pdf','xml']) $('export'+(kind==='pdf'?'Pdf':'Xml')).disabled=!state.documents.some(d=>d.file_type===kind&&d.stage==='COMPLETED'&&(!state.selected.size||state.selected.has(d.document_id)));
-}
-async function refresh() {if(state.refreshing)return;state.refreshing=true;try{state.documents=await api('/api/documents');render();}catch(e){notice(`Не удалось обновить документы: ${e.message}`,true);}finally{state.refreshing=false;}}
-async function upload(files) {if(state.uploading){notice('Дождитесь завершения текущей загрузки.',true);return;}const accepted=[],rejected=[];for(const file of files){(/\.(pdf|xml)$/i.test(file.name)?accepted:rejected).push(file);}if(!accepted.length){notice('Выберите файлы PDF или XML.',true);return;}state.uploading=true;$('dropzone').disabled=true;notice(`Загружаем файлы: ${accepted.length}…`);const form=new FormData();for(const file of accepted) form.append('files',file,file.name);try{const result=await api('/api/documents/upload-batch',{method:'POST',body:form});const errors=[...rejected.map(f=>`${f.name}: неподдерживаемый формат`),...result.errors.map(e=>`${e.file_name}: ${e.error}`)];notice(`Принято документов: ${result.documents.length}. Обработка выполняется автоматически.`+(errors.length?'\n'+errors.join('\n'):''),errors.length>0);await refresh();$('documents').scrollIntoView({behavior:'smooth',block:'start'});}catch(e){notice(`Загрузка не завершилась: ${e.message}`,true);}finally{state.uploading=false;$('dropzone').disabled=false;$('fileInput').value='';}}
-const fields=[['Тип документа','document.document_type'],['Подтип','document.document_type_2'],['Дата документа','document.document_date'],['Должник','debtor.full_name'],['Фамилия','debtor.last_name'],['Имя','debtor.first_name'],['Отчество','debtor.middle_name'],['Дата рождения','debtor.birth_date'],['Паспорт','debtor.passport'],['СНИЛС','debtor.snils'],['ИНН','debtor.inn'],['Адрес','address.full_address'],['Улица','address.street'],['Дом','address.dom'],['Квартира','address.kv'],['Номер дела','case.number'],['Дата дела','case.case_date'],['Начало периода долга','debt.period_start'],['Окончание периода долга','debt.period_end'],['Основной долг, ₽','debt.principal'],['Пени, ₽','debt.penalty'],['Госпошлина, ₽','debt.state_duty'],['Почтовые расходы, ₽','debt.postal_expenses'],['Номер производства','enforcement.proceedings_number'],['Номер исполнительного документа','enforcement.document_number'],['Дата исполнительного документа','enforcement.document_date'],['Сумма по исполнительному документу, ₽','enforcement.debt_sum'],['Должников / соответчиков','co_defendants.count'],['ФИО соответчиков','co_defendants.names']];
-function get(object,path){return path.split('.').reduce((value,key)=>value?.[key],object);}
-function mailLabel(mail){return {NOT_REQUESTED:'Письмо ещё не отправлялось',SENDING:'Отправка…',SENT:'SMTP-сервер принял письмо. Проверьте ящик получателя.',ERROR:mail.error||'Ошибка отправки'}[mail.status]||mail.status;}
-function updateMail(mail,review){$('mailStatus').textContent=mailLabel(mail);$('sendButton').hidden=!review.needs_lawyer;$('sendButton').disabled=['SENT','SENDING'].includes(mail.status);$('sendButton').textContent=mail.status==='SENT'?'Отправлено':mail.status==='ERROR'?'Повторить отправку':'Отправить юристу';}
-async function openDetail(document){const id=document.document_id;state.current=id;$('detailTitle').textContent=document.file_name;$('detailBody').textContent='Загружаем результат…';$('sendButton').hidden=true;$('mailStatus').textContent='';if(!$('detail').open)$('detail').showModal();try{const result=await api(`/api/documents/${id}/result`);if(state.current!==id)return;const body=$('detailBody');body.replaceChildren();const review=result.lawyer_review||{};const analysis=result.analysis||{};const box=node('div',undefined,'review-box');box.append(node('strong',review.needs_lawyer?'Документ отобран для проверки юристом':analysis.requires_review?'Требуется проверка данных':'Проверки полноты и формата пройдены'));if(!analysis.requires_review)box.append(node('p','Обязательные поля заполнены; ошибок формата по текущим правилам не обнаружено. Проверка не подтверждает юридическую корректность или совпадение всех полей с оригиналом.'));if(review.requires_context_review)box.append(node('p','Отбор выполнен по фразам. Перед ручной отправкой проверьте, что цитата относится к решению по этому делу.'));const list=node('ul');for(const reason of analysis.review_reasons||[])list.append(node('li',reason));box.append(list);for(const match of review.matches||[]){box.append(node('p',`${match.phrase}${match.page?' · стр. '+match.page:''}`),node('p',match.snippet));}if(analysis.missing_fields?.length)box.append(node('p','Поля с пропусками: '+analysis.missing_fields.join(', ')));body.append(box);const grid=node('dl',undefined,'field-grid');for(const [label,path] of fields){let value=get(result,path);if(Array.isArray(value))value=value.join('; ');const missing=value===null||value===undefined||value==='';const field=node('div',undefined,'field');field.append(node('dt',label),node('dd',missing?'Не извлечено':String(value),missing?'missing':''));grid.append(field);}body.append(grid);const detail=node('details');detail.append(node('summary','Извлечённый текст'),node('pre',result.extracted_text||'Текст отсутствует'));body.append(detail);const raw=node('details');raw.append(node('summary','Данные парсера'),node('pre',JSON.stringify(result.xml_fields||result.llm_fields||{},null,2)));body.append(raw);const actions=node('div');const exportButton=node('button','↓ CSV этого документа','secondary');exportButton.addEventListener('click',()=>download(document.file_type,[id]));actions.append(exportButton);body.append(actions);state.review=review;try{const mail=await api(`/api/documents/${id}/mail-status`);if(state.current===id)updateMail(mail,review);}catch(e){if(state.current===id){$('mailStatus').textContent=e.message;$('sendButton').hidden=true;}}}catch(e){if(state.current===id)$('detailBody').textContent=e.message;}}
-async function download(kind,ids){const chosen=ids||[...state.selected];const query=new URLSearchParams();for(const id of chosen)query.append('document_id',id);try{const response=await fetch(`/api/exports/${kind}.csv?${query}`);if(!response.ok){const data=await response.json();throw new Error(data.detail||'Ошибка выгрузки');}const url=URL.createObjectURL(await response.blob());const a=node('a');a.href=url;a.download=`${kind}_results.csv`;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){notice(e.message,true);}}
-$('sendButton').addEventListener('click',async()=>{const id=state.current;if(!id||!confirm('Вы проверили документ и найденные фразы? Отправить исходный PDF на настроенный адрес юриста?'))return;$('sendButton').disabled=true;$('mailStatus').textContent='Отправляем…';try{const mail=await api(`/api/documents/${id}/send-to-lawyer`,{method:'POST'});if(state.current===id)updateMail(mail,state.review);}catch(e){if(state.current!==id)return;$('mailStatus').textContent=e.message;try{updateMail(await api(`/api/documents/${id}/mail-status`),state.review);}catch{$('sendButton').disabled=false;}}});
-$('dropzone').addEventListener('click',()=>$('fileInput').click());$('fileInput').addEventListener('change',()=>upload([...$('fileInput').files]));let dragDepth=0;const zone=$('dropzone');zone.addEventListener('dragenter',e=>{e.preventDefault();dragDepth++;zone.classList.add('dragging');});zone.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='copy';});zone.addEventListener('dragleave',()=>{if(--dragDepth<=0)zone.classList.remove('dragging');});zone.addEventListener('drop',e=>{e.preventDefault();dragDepth=0;zone.classList.remove('dragging');upload([...e.dataTransfer.files]);});window.addEventListener('dragover',e=>e.preventDefault());window.addEventListener('drop',e=>e.preventDefault());
-$('refresh').addEventListener('click',refresh);$('search').addEventListener('input',render);$('filter').addEventListener('change',render);$('selectAll').addEventListener('change',()=>{for(const d of visible())$('selectAll').checked?state.selected.add(d.document_id):state.selected.delete(d.document_id);render();});$('exportPdf').addEventListener('click',()=>download('pdf'));$('exportXml').addEventListener('click',()=>download('xml'));$('closeDetail').addEventListener('click',()=>$('detail').close());$('detail').addEventListener('close',()=>{state.current=null;});$('menuButton').addEventListener('click',()=>{$('menu').hidden=!$('menu').hidden;$('menuButton').setAttribute('aria-expanded',String(!$('menu').hidden));});$('helpButton').addEventListener('click',()=>{$('menu').hidden=true;$('menuButton').setAttribute('aria-expanded','false');$('help').showModal();});$('closeHelp').addEventListener('click',()=>$('help').close());refresh();setInterval(()=>{if(!document.hidden)refresh();},3000);
+  "use strict";
+  
+  // Состояние интерфейса и общие функции.
+  const $ = (id) => document.getElementById(id);
+  const state = {
+    documents: [],
+    selected: new Set(),
+    current: null,
+    refreshing: false,
+    uploading: false,
+  };
+  const names = {
+    UPLOADED: "В очереди",
+    PROCESSING: "Обрабатывается",
+    REQUIRES_REVIEW: "Нужна проверка",
+    COMPLETED: "Обработано",
+    ERROR: "Ошибка",
+  };
+  function node(tag, text, cls) {
+    const el = document.createElement(tag);
+    if (text !== undefined) el.textContent = text;
+    if (cls) el.className = cls;
+    return el;
+  }
+  function notice(text, error = false) {
+    $("notice").textContent = text;
+    $("notice").hidden = false;
+    $("notice").classList.toggle("error", error);
+  }
+  async function api(url, options) {
+    const response = await fetch(url, options);
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      const detail = data?.detail;
+      throw new Error(
+        typeof detail === "string"
+          ? detail
+          : detail?.error ||
+              detail?.message ||
+              `Ошибка запроса: ${response.status}`,
+      );
+    }
+    return data;
+  }
+  // Фильтрация и отображение списка документов.
+  function visible() {
+    const query = $("search").value.toLowerCase();
+    const filter = $("filter").value;
+    return state.documents.filter(
+      (d) =>
+        d.file_name.toLowerCase().includes(query) &&
+        (filter === "all" ||
+          (filter === "working" &&
+            ["UPLOADED", "PROCESSING"].includes(d.status)) ||
+          (filter === "ready" && d.stage === "COMPLETED") ||
+          (filter === "error" && d.status === "ERROR")),
+    );
+  }
+  function render() {
+    const rows = $("rows");
+    rows.replaceChildren();
+    const docs = visible();
+    $("total").textContent = state.documents.length;
+    $("empty").hidden = docs.length > 0;
+    $("empty").textContent = state.documents.length
+      ? "По заданному фильтру документов нет."
+      : "Загрузите первый документ — результат появится здесь.";
+    for (const d of docs) {
+      const tr = node("tr");
+      const selectCell = node("td");
+      const check = document.createElement("input");
+      check.type = "checkbox";
+      check.checked = state.selected.has(d.document_id);
+      check.setAttribute("aria-label", `Выбрать ${d.file_name}`);
+      check.addEventListener("change", () => {
+        check.checked
+          ? state.selected.add(d.document_id)
+          : state.selected.delete(d.document_id);
+        render();
+      });
+      selectCell.append(check);
+      tr.append(selectCell);
+      const file = node("td", undefined, "filename");
+      file.append(
+        node("span", d.file_type.toUpperCase(), "file-icon"),
+        document.createTextNode(d.file_name),
+      );
+      tr.append(file, node("td", d.file_type.toUpperCase()));
+      const status = node("td");
+      status.append(
+        node(
+          "span",
+          names[d.status] || d.status,
+          "badge " +
+            (d.status === "ERROR"
+              ? "error"
+              : d.stage === "COMPLETED"
+                ? "ready"
+                : ""),
+        ),
+      );
+      status.append(node("small", d.error || d.message || ""));
+      if (["UPLOADED", "PROCESSING"].includes(d.status)) {
+        const progress = document.createElement("progress");
+        progress.max = 100;
+        progress.value = d.progress;
+        progress.setAttribute("aria-label", "Ход обработки");
+        status.append(progress);
+      }
+      tr.append(status);
+      const actions = node("td");
+      const button = node("button", "Результат", "secondary");
+      button.disabled = d.stage !== "COMPLETED";
+      button.addEventListener("click", () => openDetail(d));
+      actions.append(button);
+      tr.append(actions);
+      rows.append(tr);
+    }
+    const all = $("selectAll");
+    all.checked =
+      docs.length > 0 && docs.every((d) => state.selected.has(d.document_id));
+    all.indeterminate =
+      docs.some((d) => state.selected.has(d.document_id)) && !all.checked;
+    $("selectionHint").textContent = state.selected.size
+      ? `Выбрано: ${state.selected.size}. В CSV попадут обработанные документы выбранного формата.`
+      : "Выгрузка включает все обработанные документы соответствующего формата.";
+    for (const kind of ["pdf", "xml"])
+      $("export" + (kind === "pdf" ? "Pdf" : "Xml")).disabled =
+        !state.documents.some(
+          (d) =>
+            d.file_type === kind &&
+            d.stage === "COMPLETED" &&
+            (!state.selected.size || state.selected.has(d.document_id)),
+        );
+  }
+  // Обновление списка и пакетная загрузка.
+  async function refresh() {
+    if (state.refreshing) return;
+    state.refreshing = true;
+    try {
+      state.documents = await api("/api/documents");
+      render();
+    } catch (e) {
+      notice(`Не удалось обновить документы: ${e.message}`, true);
+    } finally {
+      state.refreshing = false;
+    }
+  }
+  async function upload(files) {
+    if (state.uploading) {
+      notice("Дождитесь завершения текущей загрузки.", true);
+      return;
+    }
+    const accepted = [],
+      rejected = [];
+    for (const file of files) {
+      (/\.(pdf|xml)$/i.test(file.name) ? accepted : rejected).push(file);
+    }
+    if (!accepted.length) {
+      notice("Выберите файлы PDF или XML.", true);
+      return;
+    }
+    state.uploading = true;
+    $("dropzone").disabled = true;
+    notice(`Загружаем файлы: ${accepted.length}…`);
+    const form = new FormData();
+    for (const file of accepted) form.append("files", file, file.name);
+    try {
+      const result = await api("/api/documents/upload-batch", {
+        method: "POST",
+        body: form,
+      });
+      const errors = [
+        ...rejected.map((f) => `${f.name}: неподдерживаемый формат`),
+        ...result.errors.map((e) => `${e.file_name}: ${e.error}`),
+      ];
+      notice(
+        `Принято документов: ${result.documents.length}. Обработка выполняется автоматически.` +
+          (errors.length ? "\n" + errors.join("\n") : ""),
+        errors.length > 0,
+      );
+      await refresh();
+      $("documents").scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (e) {
+      notice(`Загрузка не завершилась: ${e.message}`, true);
+    } finally {
+      state.uploading = false;
+      $("dropzone").disabled = false;
+      $("fileInput").value = "";
+    }
+  }
+  // Поля результата, карточка документа и статус письма.
+  const fields = [
+    ["Тип документа", "document.document_type"],
+    ["Подтип", "document.document_type_2"],
+    ["Дата документа", "document.document_date"],
+    ["Должник", "debtor.full_name"],
+    ["Фамилия", "debtor.last_name"],
+    ["Имя", "debtor.first_name"],
+    ["Отчество", "debtor.middle_name"],
+    ["Дата рождения", "debtor.birth_date"],
+    ["Паспорт", "debtor.passport"],
+    ["СНИЛС", "debtor.snils"],
+    ["ИНН", "debtor.inn"],
+    ["Адрес", "address.full_address"],
+    ["Улица", "address.street"],
+    ["Дом", "address.dom"],
+    ["Квартира", "address.kv"],
+    ["Номер дела", "case.number"],
+    ["Дата дела", "case.case_date"],
+    ["Начало периода долга", "debt.period_start"],
+    ["Окончание периода долга", "debt.period_end"],
+    ["Основной долг, ₽", "debt.principal"],
+    ["Пени, ₽", "debt.penalty"],
+    ["Госпошлина, ₽", "debt.state_duty"],
+    ["Почтовые расходы, ₽", "debt.postal_expenses"],
+    ["Номер производства", "enforcement.proceedings_number"],
+    ["Номер исполнительного документа", "enforcement.document_number"],
+    ["Дата исполнительного документа", "enforcement.document_date"],
+    ["Сумма по исполнительному документу, ₽", "enforcement.debt_sum"],
+    ["Должников / соответчиков", "co_defendants.count"],
+    ["ФИО соответчиков", "co_defendants.names"],
+  ];
+  function get(object, path) {
+    return path.split(".").reduce((value, key) => value?.[key], object);
+  }
+  function mailLabel(mail) {
+    return (
+      {
+        NOT_REQUESTED: "Письмо ещё не отправлялось",
+        SENDING: "Отправка…",
+        SENT: "SMTP-сервер принял письмо. Проверьте ящик получателя.",
+        ERROR: mail.error || "Ошибка отправки",
+      }[mail.status] || mail.status
+    );
+  }
+  function updateMail(mail, review) {
+    $("mailStatus").textContent = mailLabel(mail);
+    $("sendButton").hidden = !review.needs_lawyer;
+    $("sendButton").disabled = ["SENT", "SENDING"].includes(mail.status);
+    $("sendButton").textContent =
+      mail.status === "SENT"
+        ? "Отправлено"
+        : mail.status === "ERROR"
+          ? "Повторить отправку"
+          : "Отправить юристу";
+  }
+  async function openDetail(document) {
+    const id = document.document_id;
+    state.current = id;
+    $("detailTitle").textContent = document.file_name;
+    $("detailBody").textContent = "Загружаем результат…";
+    $("sendButton").hidden = true;
+    $("mailStatus").textContent = "";
+    if (!$("detail").open) $("detail").showModal();
+    try {
+      const result = await api(`/api/documents/${id}/result`);
+      if (state.current !== id) return;
+      const body = $("detailBody");
+      body.replaceChildren();
+      const review = result.lawyer_review || {};
+      const analysis = result.analysis || {};
+      const box = node("div", undefined, "review-box");
+      box.append(
+        node(
+          "strong",
+          review.needs_lawyer
+            ? "Документ отобран для проверки юристом"
+            : analysis.requires_review
+              ? "Требуется проверка данных"
+              : "Проверки полноты и формата пройдены",
+        ),
+      );
+      if (!analysis.requires_review)
+        box.append(
+          node(
+            "p",
+            "Обязательные поля заполнены; ошибок формата по текущим правилам не обнаружено. Проверка не подтверждает юридическую корректность или совпадение всех полей с оригиналом.",
+          ),
+        );
+      if (review.requires_context_review)
+        box.append(
+          node(
+            "p",
+            "Отбор выполнен по фразам. Перед ручной отправкой проверьте, что цитата относится к решению по этому делу.",
+          ),
+        );
+      const list = node("ul");
+      for (const reason of analysis.review_reasons || [])
+        list.append(node("li", reason));
+      box.append(list);
+      for (const match of review.matches || []) {
+        box.append(
+          node(
+            "p",
+            `${match.phrase}${match.page ? " · стр. " + match.page : ""}`,
+          ),
+          node("p", match.snippet),
+        );
+      }
+      if (analysis.missing_fields?.length)
+        box.append(
+          node("p", "Поля с пропусками: " + analysis.missing_fields.join(", ")),
+        );
+      body.append(box);
+      const grid = node("dl", undefined, "field-grid");
+      for (const [label, path] of fields) {
+        let value = get(result, path);
+        if (Array.isArray(value)) value = value.join("; ");
+        const missing = value === null || value === undefined || value === "";
+        const field = node("div", undefined, "field");
+        field.append(
+          node("dt", label),
+          node(
+            "dd",
+            missing ? "Не извлечено" : String(value),
+            missing ? "missing" : "",
+          ),
+        );
+        grid.append(field);
+      }
+      body.append(grid);
+      const detail = node("details");
+      detail.append(
+        node("summary", "Извлечённый текст"),
+        node("pre", result.extracted_text || "Текст отсутствует"),
+      );
+      body.append(detail);
+      const raw = node("details");
+      raw.append(
+        node("summary", "Данные парсера"),
+        node(
+          "pre",
+          JSON.stringify(result.xml_fields || result.llm_fields || {}, null, 2),
+        ),
+      );
+      body.append(raw);
+      const actions = node("div");
+      const exportButton = node("button", "↓ CSV этого документа", "secondary");
+      exportButton.addEventListener("click", () =>
+        download(document.file_type, [id]),
+      );
+      actions.append(exportButton);
+      body.append(actions);
+      state.review = review;
+      try {
+        const mail = await api(`/api/documents/${id}/mail-status`);
+        if (state.current === id) updateMail(mail, review);
+      } catch (e) {
+        if (state.current === id) {
+          $("mailStatus").textContent = e.message;
+          $("sendButton").hidden = true;
+        }
+      }
+    } catch (e) {
+      if (state.current === id) $("detailBody").textContent = e.message;
+    }
+  }
+  // Экспорт CSV.
+  async function download(kind, ids) {
+    const chosen = ids || [...state.selected];
+    const query = new URLSearchParams();
+    for (const id of chosen) query.append("document_id", id);
+    try {
+      const response = await fetch(`/api/exports/${kind}.csv?${query}`);
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || "Ошибка выгрузки");
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const a = node("a");
+      a.href = url;
+      a.download = `${kind}_results.csv`;
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      notice(e.message, true);
+    }
+  }
+  // Отправка документа юристу.
+  $("sendButton").addEventListener("click", async () => {
+    const id = state.current;
+    if (
+      !id ||
+      !confirm(
+        "Вы проверили документ и найденные фразы? Отправить исходный PDF на настроенный адрес юриста?",
+      )
+    )
+      return;
+    $("sendButton").disabled = true;
+    $("mailStatus").textContent = "Отправляем…";
+    try {
+      const mail = await api(`/api/documents/${id}/send-to-lawyer`, {
+        method: "POST",
+      });
+      if (state.current === id) updateMail(mail, state.review);
+    } catch (e) {
+      if (state.current !== id) return;
+      $("mailStatus").textContent = e.message;
+      try {
+        updateMail(await api(`/api/documents/${id}/mail-status`), state.review);
+      } catch {
+        $("sendButton").disabled = false;
+      }
+    }
+  });
+  // Выбор файлов и drag-and-drop.
+  $("dropzone").addEventListener("click", () => $("fileInput").click());
+  $("fileInput").addEventListener("change", () =>
+    upload([...$("fileInput").files]),
+  );
+  let dragDepth = 0;
+  const zone = $("dropzone");
+  zone.addEventListener("dragenter", (e) => {
+    e.preventDefault();
+    dragDepth++;
+    zone.classList.add("dragging");
+  });
+  zone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  });
+  zone.addEventListener("dragleave", () => {
+    if (--dragDepth <= 0) zone.classList.remove("dragging");
+  });
+  zone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dragDepth = 0;
+    zone.classList.remove("dragging");
+    upload([...e.dataTransfer.files]);
+  });
+  window.addEventListener("dragover", (e) => e.preventDefault());
+  window.addEventListener("drop", (e) => e.preventDefault());
+  // Фильтры, диалоги, меню и периодическое обновление.
+  $("refresh").addEventListener("click", refresh);
+  $("search").addEventListener("input", render);
+  $("filter").addEventListener("change", render);
+  $("selectAll").addEventListener("change", () => {
+    for (const d of visible())
+      $("selectAll").checked
+        ? state.selected.add(d.document_id)
+        : state.selected.delete(d.document_id);
+    render();
+  });
+  $("exportPdf").addEventListener("click", () => download("pdf"));
+  $("exportXml").addEventListener("click", () => download("xml"));
+  $("closeDetail").addEventListener("click", () => $("detail").close());
+  $("detail").addEventListener("close", () => {
+    state.current = null;
+  });
+  $("menuButton").addEventListener("click", () => {
+    $("menu").hidden = !$("menu").hidden;
+    $("menuButton").setAttribute("aria-expanded", String(!$("menu").hidden));
+  });
+  $("helpButton").addEventListener("click", () => {
+    $("menu").hidden = true;
+    $("menuButton").setAttribute("aria-expanded", "false");
+    $("help").showModal();
+  });
+  $("closeHelp").addEventListener("click", () => $("help").close());
+  refresh();
+  setInterval(() => {
+    if (!document.hidden) refresh();
+  }, 3000);
+  
+  // Keep the diamond centred on the upload plus after layout/font changes.
+  (() => {
+    const hero = document.querySelector(".hero");
+    const plus = hero?.querySelector(".plus");
+    if (!hero || !plus) return;
+    const positionGlow = () => {
+      const area = hero.getBoundingClientRect();
+      const mark = plus.getBoundingClientRect();
+      hero.style.setProperty(
+        "--glow-x",
+        `${mark.left - area.left + mark.width / 2}px`,
+      );
+      hero.style.setProperty(
+        "--glow-y",
+        `${mark.top - area.top + mark.height / 2}px`,
+      );
+    };
+    positionGlow();
+    window.addEventListener("resize", positionGlow, { passive: true });
+    if ("ResizeObserver" in window) {
+      const observer = new ResizeObserver(positionGlow);
+      observer.observe(hero);
+      observer.observe(plus);
+    }
+    if (document.fonts) document.fonts.ready.then(positionGlow);
+  })();

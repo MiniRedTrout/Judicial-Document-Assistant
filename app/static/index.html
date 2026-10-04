@@ -1,12 +1,206 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ДѢЛО — судебные документы</title><link rel="stylesheet" href="/static/style.css"><script src="/static/app.js" defer></script></head>
-<body><div class="glow" aria-hidden="true"></div><header><a class="brand" href="/" aria-label="Дело, главная">ДѢЛО<span>;;</span></a><span class="slash">//</span><p>онлайн-сервис для обработки судебных документов</p><button id="menuButton" class="menu-button" aria-label="Открыть меню" aria-expanded="false">☰</button><nav id="menu" hidden><a href="#documents">Документы</a><a href="/docs" target="_blank" rel="noopener">API</a><button id="helpButton">Как пользоваться</button></nav></header>
-<main><section class="hero" aria-label="Загрузка документов"><button class="dropzone" id="dropzone"><span class="plus">+</span><span class="drop-title">вставьте ваш(и) файл(ы)</span><span class="hint">Перетащите сюда или нажмите, чтобы выбрать · PDF / XML</span></button><input id="fileInput" type="file" accept=".pdf,.xml" multiple hidden><p class="intro">ИИ-помощник для обработки судебных<br>документов в PDF, включая сканы, и<br>документов ФССП в XML</p></section>
-<div id="notice" role="status" hidden></div>
-<section class="workspace" id="documents"><div class="section-heading"><div><span class="eyebrow">ВАШЕ РАБОЧЕЕ ПРОСТРАНСТВО</span><h1>Документы <span id="total">0</span></h1></div><button id="refresh" class="secondary">Обновить</button></div>
-<div class="toolbar"><label class="search"><span>⌕</span><input id="search" placeholder="Поиск по имени файла" aria-label="Поиск документов"></label><select id="filter" aria-label="Фильтр документов"><option value="all">Все документы</option><option value="working">В обработке</option><option value="ready">Обработанные</option><option value="error">Ошибки</option></select><div class="exports"><button id="exportPdf" class="secondary">↓ CSV · PDF</button><button id="exportXml" class="secondary">↓ CSV · XML</button></div></div>
-<p class="subtle" id="selectionHint">Выгрузка включает все обработанные документы соответствующего формата.</p><div class="table-wrap"><table><thead><tr><th><input id="selectAll" type="checkbox" aria-label="Выбрать видимые документы"></th><th>Документ</th><th>Формат</th><th>Обработка</th><th></th></tr></thead><tbody id="rows"></tbody></table></div><p id="empty" class="empty">Загрузите первый документ — результат появится здесь.</p></section></main>
-<footer>ДѢЛО <span>Документы и результаты сохраняются между запусками сервиса.</span></footer>
-<dialog id="detail"><div class="dialog-head"><div><span class="eyebrow">РЕЗУЛЬТАТ ОБРАБОТКИ</span><h2 id="detailTitle"></h2></div><button id="closeDetail" class="icon-button" aria-label="Закрыть">×</button></div><div id="detailBody"></div><div class="dialog-actions"><button id="sendButton" class="primary">Отправить юристу</button><span id="mailStatus" role="status"></span></div></dialog>
-<dialog id="help"><h2>Как пользоваться</h2><p>Выберите PDF или XML либо перетащите несколько файлов в область загрузки. Дождитесь обработки и откройте результат.</p><p>Проверьте извлечённые поля. Для выгрузки по шаблону выберите CSV · PDF или CSV · XML. Чтобы выгрузить часть документов, отметьте их в списке.</p><p>Для актов с найденными фразами доступна ручная отправка юристу. Перед отправкой проверьте цитату и контекст.</p><button id="closeHelp" class="primary">Понятно</button></dialog>
-</body></html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ДЭЛО — судебные документы</title>
+    <link
+      rel="stylesheet"
+      href="/static/style.css?v=thin-plus-header-20261004"
+    />
+    <script src="/static/app.js?v=thin-plus-header-20261004" defer></script>
+  </head>
+  <body>
+    <!-- Шапка и навигация -->
+    <header>
+      <a class="brand" href="/" aria-label="Дело, главная"
+        >ДЭЛО<span>;;</span></a
+      ><span class="slash">//</span>
+      <p>онлайн-сервис для обработки судебных документов</p>
+      <button
+        id="menuButton"
+        class="menu-button"
+        aria-label="Открыть меню"
+        aria-expanded="false"
+      >
+        ☰
+      </button>
+      <nav id="menu" hidden>
+        <a href="#documents">Документы</a
+        ><a href="/docs" target="_blank" rel="noopener">API</a
+        ><button id="helpButton">Как пользоваться</button>
+      </nav>
+    </header>
+    <!-- Загрузка файлов и рабочее пространство -->
+    <main>
+      <section class="hero" aria-label="Загрузка документов">
+        <div class="glow" aria-hidden="true">
+          <svg
+            viewBox="-700 -410 1400 820"
+            xmlns="http://www.w3.org/2000/svg"
+            focusable="false"
+          >
+            <defs>
+              <filter
+                id="diamond-soften"
+                x="-25%"
+                y="-50%"
+                width="150%"
+                height="200%"
+              >
+                <feGaussianBlur stdDeviation="18" />
+              </filter>
+            </defs>
+            <g filter="url(#diamond-soften)">
+              <polygon points="0,-340 640,0 0,340 -640,0" fill="#fffdfb" />
+              <polygon points="0,-331.5 624,0 0,331.5 -624,0" fill="#fefcfa" />
+              <polygon points="0,-323 608,0 0,323 -608,0" fill="#fcfcfa" />
+              <polygon points="0,-314.5 592,0 0,314.5 -592,0" fill="#fafbfa" />
+              <polygon points="0,-306 576,0 0,306 -576,0" fill="#f9faf9" />
+              <polygon points="0,-297.5 560,0 0,297.5 -560,0" fill="#f8faf8" />
+              <polygon points="0,-289 544,0 0,289 -544,0" fill="#f6f9f8" />
+              <polygon points="0,-280.5 528,0 0,280.5 -528,0" fill="#f3f8f7" />
+              <polygon points="0,-272 512,0 0,272 -512,0" fill="#eff6f6" />
+              <polygon points="0,-263.5 496,0 0,263.5 -496,0" fill="#ecf5f5" />
+              <polygon points="0,-255 480,0 0,255 -480,0" fill="#e9f3f4" />
+              <polygon points="0,-246.5 464,0 0,246.5 -464,0" fill="#e6f2f3" />
+              <polygon points="0,-238 448,0 0,238 -448,0" fill="#e2f0f2" />
+              <polygon points="0,-229.5 432,0 0,229.5 -432,0" fill="#dfeff2" />
+              <polygon points="0,-221 416,0 0,221 -416,0" fill="#dbedf1" />
+              <polygon points="0,-212.5 400,0 0,212.5 -400,0" fill="#d7ebef" />
+              <polygon points="0,-204 384,0 0,204 -384,0" fill="#d3e9ee" />
+              <polygon points="0,-195.5 368,0 0,195.5 -368,0" fill="#cfe7ed" />
+              <polygon points="0,-187 352,0 0,187 -352,0" fill="#cbe5ec" />
+              <polygon points="0,-178.5 336,0 0,178.5 -336,0" fill="#c7e3eb" />
+              <polygon points="0,-170 320,0 0,170 -320,0" fill="#c3e1ea" />
+              <polygon points="0,-161.5 304,0 0,161.5 -304,0" fill="#bedfe9" />
+              <polygon points="0,-153 288,0 0,153 -288,0" fill="#bcdde6" />
+              <polygon points="0,-144.5 272,0 0,144.5 -272,0" fill="#bedbe2" />
+              <polygon points="0,-136 256,0 0,136 -256,0" fill="#bfdadd" />
+              <polygon points="0,-127.5 240,0 0,127.5 -240,0" fill="#c0d8d8" />
+              <polygon points="0,-119 224,0 0,119 -224,0" fill="#c2d6d4" />
+              <polygon points="0,-110.5 208,0 0,110.5 -208,0" fill="#c3d4cf" />
+              <polygon points="0,-102 192,0 0,102 -192,0" fill="#c4d2ca" />
+              <polygon points="0,-93.5 176,0 0,93.5 -176,0" fill="#c5d0c6" />
+              <polygon points="0,-85 160,0 0,85 -160,0" fill="#c6cec1" />
+              <polygon points="0,-76.5 144,0 0,76.5 -144,0" fill="#c8ccbc" />
+              <polygon points="0,-68 128,0 0,68 -128,0" fill="#c9cab8" />
+              <polygon points="0,-59.5 112,0 0,59.5 -112,0" fill="#cac9b4" />
+              <polygon points="0,-51 96,0 0,51 -96,0" fill="#cac9b4" />
+              <polygon points="0,-42.5 80,0 0,42.5 -80,0" fill="#cac9b4" />
+              <polygon points="0,-34 64,0 0,34 -64,0" fill="#cac9b4" />
+              <polygon points="0,-25.5 48,0 0,25.5 -48,0" fill="#cac9b4" />
+              <polygon points="0,-17 32,0 0,17 -32,0" fill="#cac9b4" />
+              <polygon points="0,-8.5 16,0 0,8.5 -16,0" fill="#cac9b4" />
+            </g>
+          </svg>
+        </div>
+        <button class="dropzone" id="dropzone">
+          <span class="plus" aria-hidden="true"></span
+          ><span class="drop-title">вставьте ваш(и) файл(ы)</span
+          ><span class="hint"
+            >перетащите сюда или нажмите, чтобы выбрать · PDF / XML</span
+          ></button
+        ><input id="fileInput" type="file" accept=".pdf,.xml" multiple hidden />
+        <p class="intro">
+          ИИ-помощник для обработки судебных<br />документов в PDF, включая
+          сканы, и<br />документов ФССП в XML
+        </p>
+      </section>
+      <div id="notice" role="status" hidden></div>
+      <!-- Список документов, фильтры и экспорт -->
+      <section class="workspace" id="documents">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">ВАШЕ РАБОЧЕЕ ПРОСТРАНСТВО</span>
+            <h1>документы <span id="total">0</span></h1>
+          </div>
+          <button id="refresh" class="secondary">Обновить</button>
+        </div>
+        <div class="toolbar">
+          <label class="search"
+            ><span>⌕</span
+            ><input
+              id="search"
+              placeholder="поиск по имени файла"
+              aria-label="Поиск документов" /></label
+          ><select id="filter" aria-label="Фильтр документов">
+            <option value="all">Все документы</option>
+            <option value="working">В обработке</option>
+            <option value="ready">Обработанные</option>
+            <option value="error">Ошибки</option>
+          </select>
+          <div class="exports">
+            <button id="exportPdf" class="secondary">↓ CSV · PDF</button
+            ><button id="exportXml" class="secondary">↓ CSV · XML</button>
+          </div>
+        </div>
+        <p class="subtle" id="selectionHint">
+          Выгрузка включает все обработанные документы соответствующего формата.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>
+                  <input
+                    id="selectAll"
+                    type="checkbox"
+                    aria-label="Выбрать видимые документы"
+                  />
+                </th>
+                <th>Документ</th>
+                <th>Формат</th>
+                <th>Обработка</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+        <p id="empty" class="empty">
+          Загрузите первый документ — результат появится здесь.
+        </p>
+      </section>
+    </main>
+    <!-- Подвал -->
+    <footer>
+      ДЭЛО
+      <span>Документы и результаты сохраняются между запусками сервиса.</span>
+    </footer>
+    <!-- Карточка результата -->
+    <dialog id="detail">
+      <div class="dialog-head">
+        <div>
+          <span class="eyebrow">РЕЗУЛЬТАТ ОБРАБОТКИ</span>
+          <h2 id="detailTitle"></h2>
+        </div>
+        <button id="closeDetail" class="icon-button" aria-label="Закрыть">
+          ×
+        </button>
+      </div>
+      <div id="detailBody"></div>
+      <div class="dialog-actions">
+        <button id="sendButton" class="primary">Отправить юристу</button
+        ><span id="mailStatus" role="status"></span>
+      </div>
+    </dialog>
+    <!-- Справка -->
+    <dialog id="help">
+      <h2>Как пользоваться</h2>
+      <p>
+        Выберите PDF или XML либо перетащите несколько файлов в область
+        загрузки. Дождитесь обработки и откройте результат.
+      </p>
+      <p>
+        Проверьте извлечённые поля. Для выгрузки по шаблону выберите CSV · PDF
+        или CSV · XML. Чтобы выгрузить часть документов, отметьте их в списке.
+      </p>
+      <p>
+        Для актов с найденными фразами доступна ручная отправка юристу. Перед
+        отправкой проверьте цитату и контекст.
+      </p>
+      <button id="closeHelp" class="primary">Понятно</button>
+    </dialog>
+  </body>
+</html>
