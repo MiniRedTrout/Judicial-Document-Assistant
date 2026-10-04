@@ -1,7 +1,7 @@
 [project]
 name = "hackathon"
 version = "0.1.0"
-description = "ДѢЛО: обработка судебных PDF и XML ФССП"
+description = "ДЭЛО: обработка судебных PDF и XML ФССП"
 authors = [{ name = "Команда хакатона", email = "team@example.com" }]
 readme = "README.md"
 requires-python = ">=3.11,<3.15"

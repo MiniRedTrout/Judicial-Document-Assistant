@@ -1,0 +1,15 @@
+stages:
+  - test
+
+backend-tests:
+  image: python:3.12-slim
+  stage: test
+  variables:
+    MAIL_ENABLED: "false"
+    MAIL_AUTO_SEND: "false"
+    LLM_API_KEY: ""
+  before_script:
+    - python -m pip install -r requirements-integrations.txt
+  script:
+    - python -m unittest discover -s tests -v
+# OCR на реальных сканах/письма/LLM тестируются отдельно. CI не развёртывает сервис.
