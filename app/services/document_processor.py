@@ -31,6 +31,7 @@ def _process_xml(document_id: str, path: Path) -> None:
     file_name = document["file_name"] if document else path.name
     result = map_xml_result(xml_result, file_name).model_dump(mode="json")
     result["xml_fields"] = serialize_xml_fields(xml_result)
+    result["xml_metadata"] = {key: value for key, value in xml_result.items() if key.startswith("_")}
     result["extracted_text"] = xml_result.get("IdDebtText") or ""
     # Постановления ФССП не отправляются по фразам, процитированным из судебного акта.
     result["lawyer_review"] = {"needs_lawyer": False, "requires_context_review": False,
@@ -68,7 +69,7 @@ def _process_pdf(document_id: str, path: Path) -> None:
     update_document_status(document_id, "PROCESSING", "VALIDATING",
                            "Проверяем формат полей и отбираем акты юристу...", 85)
     try:
-        mapped = map_pdf_result(fields, file_name, errors=errors)
+        mapped = map_pdf_result(fields, file_name, errors=errors, source_text=source.text)
     except Exception:
         logger.exception("Ошибка преобразования ответа LLM, документ %s", document_id)
         errors.append("Ответ модели не соответствует схеме; текст сохранён")

@@ -1,4 +1,4 @@
-"""Отбор из ветки check-mail. """
+"""Отбор из ветки check-mail. Кандидат по regex требует проверки контекста."""
 from dataclasses import asdict
 
 from scripts.find_word import check_document, normalize_text, find_markers

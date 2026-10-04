@@ -1,4 +1,5 @@
 """Проверка полноты и формата результатов; не юридическая экспертиза."""
+import re
 from app.schemas.document_result import DocumentType
 
 REQUIRED = {
@@ -46,6 +47,10 @@ def apply_validation(result, kind):
     if debt and debt.period_start and debt.period_end and debt.period_start > debt.period_end:
         reasons.append('Начало периода задолженности позже его окончания')
     debtor = result.debtor
+    if kind == 'pdf' and debtor and debtor.passport:
+        digits = re.sub(r'\D', '', debtor.passport)
+        if len(digits) == 6:
+            reasons.append('Проверьте полноту паспорта: извлечены только 6 цифр, серия могла потеряться при OCR')
     if debtor and debtor.birth_date and result.case and result.case.case_date:
         if debtor.birth_date > result.case.case_date:
             reasons.append('Дата рождения должника позже даты дела')

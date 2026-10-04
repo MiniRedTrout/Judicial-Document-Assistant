@@ -5,6 +5,7 @@ from app.schemas.document_result import (
 )
 from app.services.xml_result_mapper import _to_date, _to_decimal
 from app.services.result_validation import apply_validation
+from app.services.pdf_source_checks import check_pdf_source
 
 TYPES = {
     "приказ": DocumentType.COURT_ORDER, "приказ эл": DocumentType.COURT_ORDER,
@@ -15,8 +16,9 @@ TYPES = {
 }
 
 
-def map_pdf_result(fields: dict, file_name: str, errors=None) -> DocumentResult:
-    reasons = list(errors or [])
+def map_pdf_result(fields: dict, file_name: str, errors=None, source_text="") -> DocumentResult:
+    fields, source_reasons = check_pdf_source(fields, source_text)
+    reasons = list(errors or []) + source_reasons
     missing = []
     def text(key):
         value = fields.get(key)

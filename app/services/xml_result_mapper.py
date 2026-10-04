@@ -52,7 +52,7 @@ def _to_decimal(value: Any) -> Decimal | None:
 
 def map_xml_result(xml_result: dict[str, Any], file_name: str) -> DocumentResult:
     """Сопоставляет поля J2 с полями API; ошибки значений отмечает для проверки."""
-    review_reasons = []
+    review_reasons = list(xml_result.get("_warnings", []))
     missing_fields = [
         key for key, value in xml_result.items()
         if value is None or (isinstance(value, str) and not value.strip())
@@ -84,6 +84,15 @@ def map_xml_result(xml_result: dict[str, Any], file_name: str) -> DocumentResult
     else:
         review_reasons.append("Тип XML-документа не определён; классификатор ещё не подключён")
 
+    details = xml_result.get("_debtor", {})
+    birth_date = None
+    try:
+        birth_date = _to_date(details.get("birth_date"))
+    except (TypeError, ValueError):
+        review_reasons.append("Дата рождения должника в XML имеет неверный формат")
+    name_parts = (xml_result.get("DbtrName") or "").split()
+    individual = xml_result.get("DebtorType") == "2" and len(name_parts) == 3
+
     result = DocumentResult(
         document=DocumentInfo(
             file_name=file_name,
@@ -92,7 +101,13 @@ def map_xml_result(xml_result: dict[str, Any], file_name: str) -> DocumentResult
             document_date=read_date("DocDate"),
             debtor_type=xml_result.get("DebtorType"),
         ),
-        debtor=DebtorInfo(full_name=xml_result.get("DbtrName")),
+        debtor=DebtorInfo(
+            full_name=xml_result.get("DbtrName"),
+            last_name=name_parts[0] if individual else None,
+            first_name=name_parts[1] if individual else None,
+            middle_name=name_parts[2] if individual else None,
+            birth_date=birth_date, inn=details.get("inn"), snils=details.get("snils"),
+        ),
         address=AddressInfo(
             full_address=xml_result.get("DbtrAdr"),
             street=xml_result.get("street"),
@@ -138,5 +153,5 @@ def serialize_xml_fields(xml_result: dict[str, Any]) -> dict[str, Any]:
         else value.isoformat() if isinstance(value, date)
         else str(value) if isinstance(value, Decimal)
         else value
-        for key, value in xml_result.items()
+        for key, value in xml_result.items() if not key.startswith("_")
     }
