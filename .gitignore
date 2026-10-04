@@ -174,3 +174,7 @@ data/output/
 data/cache/
 .DS_Store
 Thumbs.db
+
+# Обезличенные эталоны и примеры для сдачи
+!tests/fixtures/fssp/labels.csv
+!docs/examples/*.csv
