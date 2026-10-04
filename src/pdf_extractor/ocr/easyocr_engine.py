@@ -70,25 +70,43 @@ class EasyOCREngine(OCREngine):
             return cls._reader
 
     def recognize(self, image: np.ndarray) -> tuple[str, float]:
+        import time
+        import cv2
+
         reader = self._ensure_reader()
 
+        h, w = image.shape[:2]
+        max_side = 1600
+        if max(h, w) > max_side:
+            scale = max_side / max(h, w)
+            image = cv2.resize(
+                image,
+                (int(w * scale), int(h * scale)),
+                interpolation=cv2.INTER_AREA,
+            )
+            logger.info(
+                "Resize: {}x{} -> {}x{}", w, h, image.shape[1], image.shape[0]
+            )
 
+        t0 = time.perf_counter()
         try:
             with EasyOCREngine._infer_lock:
                 results = reader.readtext(
-                image,
-                detail=1,
-                paragraph=False,
-                canvas_size=1280,
-                mag_ratio=1.0,
-                text_threshold=0.7,
-                low_text=0.4,
-                link_threshold=0.4,
-                batch_size=1,
-            )
+                    image,
+                    detail=1,
+                    paragraph=False,
+                    canvas_size=1280,
+                    mag_ratio=1.0,
+                    text_threshold=0.7,
+                    low_text=0.4,
+                    link_threshold=0.4,
+                    batch_size=1,
+                )
         except Exception as e:
             logger.error("EasyOCR ошибка распознавания: {}", e)
             return "", 0.0
+
+        logger.info("readtext: {:.2f}s", time.perf_counter() - t0)
 
         if not results:
             return "", 0.0
