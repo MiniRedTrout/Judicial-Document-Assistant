@@ -11,3 +11,7 @@ logger.add(
     colorize=True,
     format="<m>{time:YYYY-MM-DD HH:mm:ss}</m> | <level>{level: <8}</level> | <c>{file}</c>:<c>{function}</c>:<c>{line}</c> - <level>{message}</level>",
 )
+
+
+def get_logger(name: str):
+    return logger.bind(module=name)
