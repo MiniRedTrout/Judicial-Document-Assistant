@@ -7,21 +7,26 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Системные зависимости:
+# - libgomp1       — OpenMP для torch/easyocr
+# - libglib2.0-0   — требуется opencv
+# - ca-certificates — https
+# poppler-utils БОЛЬШЕ НЕ НУЖЕН — конвертация PDF через PyMuPDF
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    poppler-utils libgomp1 libglib2.0-0 ca-certificates \
+    libgomp1 libglib2.0-0 ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements*.txt ./
 
-# CPU-вариант без больших CUDA-зависимостей.
+# CPU-вариант torch без CUDA.
 RUN python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu \
+    && python -m pip install -r requirements.txt \
     && python -m pip install -r requirements-ocr.txt
 
-
+# Предзагрузка моделей EasyOCR в образ (если используете EasyOCR)
 RUN mkdir -p /app/data/cache/easyocr \
- && python -c "import easyocr; easyocr.Reader(['ru','en'], gpu=False, model_storage_directory='/app/data/cache/easyocr', download_enabled=True)" \
+ && python -c "import easyocr; easyocr.Reader(['ru'], gpu=False, model_storage_directory='/app/data/cache/easyocr', download_enabled=True)" \
  && python -c "import os; assert os.listdir('/app/data/cache/easyocr'), 'EasyOCR models not downloaded!'"
-
 
 COPY app ./app
 COPY src ./src
@@ -31,7 +36,7 @@ RUN mkdir -p /app/storage /app/data/cache/easyocr
 
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)" || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=5)" || exit 1
 
 CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]
