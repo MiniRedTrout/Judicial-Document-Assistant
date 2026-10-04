@@ -1,4 +1,4 @@
-"""Запуск из корня Hakaton: python -m unittest discover -s tests -p test_xml_integration.py -v"""
+"""Запуск из корня  python -m unittest discover -s tests -p test_xml_integration.py -v"""
 
 import json
 import sys

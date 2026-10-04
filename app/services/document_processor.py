@@ -1,4 +1,4 @@
-"""Обработка документов: J1/PDF -> LLM, J2/XML -> схема -> SQLite."""
+"""Обработка документов: PDF -> LLM, XML -> схема -> SQLite."""
 import logging
 from pathlib import Path
 

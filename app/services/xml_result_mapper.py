@@ -1,5 +1,3 @@
-"""Преобразование результата J2 в общую схему нашего backend."""
-
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any

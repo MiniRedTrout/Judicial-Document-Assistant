@@ -1,4 +1,4 @@
-"""Пересчитывает проверки сохранённых результатов, не запускает OCR/LLM/SMTP.
+"""Пересчитывает проверки сохранённых результатов
 Запуск из корня: python -m scripts.recheck_results
 """
 from app.services import document_store as store
