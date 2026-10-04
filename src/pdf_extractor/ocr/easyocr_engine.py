@@ -30,7 +30,7 @@ class EasyOCREngine(OCREngine):
     def __init__(self) -> None:
         if EasyOCREngine._reader is None:
             try:
-                import easyocr  # noqa: F401
+                import easyocr  
             except ImportError as e:
                 raise RuntimeError(
                     "EasyOCR не установлен. Выполните: pip install easyocr"
@@ -75,7 +75,17 @@ class EasyOCREngine(OCREngine):
 
         try:
             with EasyOCREngine._infer_lock:
-                results = reader.readtext(image, detail=1, paragraph=False)
+                results = reader.readtext(
+                image,
+                detail=1,
+                paragraph=False,
+                canvas_size=1280,
+                mag_ratio=1.0,
+                text_threshold=0.7,
+                low_text=0.4,
+                link_threshold=0.4,
+                batch_size=1,
+            )
         except Exception as e:
             logger.error("EasyOCR ошибка распознавания: {}", e)
             return "", 0.0
