@@ -26,13 +26,14 @@ class IntegrationSettings:
     llm_json_mode: bool = flag("LLM_JSON_MODE", True)
     mail_enabled: bool = flag("MAIL_ENABLED")
     mail_auto_send: bool = flag("MAIL_AUTO_SEND")
-    mail_host: str = os.getenv("MAIL_SMTP_HOST", "smtp.mail.ru")
+    # Правка J3: пробелы из .env не должны ломать подключение и авторизацию SMTP.
+    mail_host: str = os.getenv("MAIL_SMTP_HOST", "smtp.mail.ru").strip()
     mail_port: int = int(os.getenv("MAIL_SMTP_PORT", "465"))
-    mail_security: str = os.getenv("MAIL_SECURITY", "ssl")
-    mail_user: str = os.getenv("MAIL_USER", "")
-    mail_password: str = os.getenv("MAIL_PASS", "")
-    mail_from: str = os.getenv("MAIL_FROM", os.getenv("MAIL_USER", ""))
-    mail_lawyer: str = os.getenv("MAIL_LAWYER", "")
+    mail_security: str = os.getenv("MAIL_SECURITY", "ssl").strip().lower()
+    mail_user: str = os.getenv("MAIL_USER", "").strip()
+    mail_password: str = os.getenv("MAIL_PASS", "").strip()
+    mail_from: str = os.getenv("MAIL_FROM", os.getenv("MAIL_USER", "")).strip()
+    mail_lawyer: str = os.getenv("MAIL_LAWYER", "").strip()
     mail_timeout: float = float(os.getenv("MAIL_TIMEOUT", "30"))
 
 
