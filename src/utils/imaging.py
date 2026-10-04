@@ -4,7 +4,7 @@ import numpy as np
 
 
 def pdf_to_images(pdf_path, dpi=300):
-    import fitz  # PyMuPDF
+    import pymupdf as fitz
     import numpy as np
 
     doc = fitz.open(str(pdf_path))
